@@ -1,0 +1,80 @@
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+
+def scrape_agents(base_url):
+    agents = []
+    page = 1
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3"
+    }
+
+    while True:
+        url = f"{base_url}?page={page}"
+        response = requests.get(url, headers=headers)
+        
+        if response.status_code != 200:
+            print(f"Failed to retrieve the webpage. Status code: {response.status_code}")
+            break
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        # Extract agent cards
+        agent_cards = soup.find_all('div', {'data-test': 'agent-card'})
+
+        if not agent_cards:
+            print(f"No more agents found on page {page}. Ending scraping.")
+            break
+
+        for card in agent_cards:
+            name_element = card.find('a', {'data-test': 'agent-card-name'})
+            license_element = card.find('p', {'class': 'license'})
+            company_element = card.find('h5', {'class': 'office-inc'})
+            phone_element = card.find('a', {'data-test': 'agent-card-phone'})
+
+            name = name_element.text.strip() if name_element else 'N/A'
+            license_state = license_element.text.strip() if license_element else 'N/A'
+            company = company_element.text.strip() if company_element else 'N/A'
+            phone = phone_element.text.strip() if phone_element else 'N/A'
+
+            agents.append({
+                'Name': name,
+                'License State': license_state,
+                'Company': company,
+                'Phone': phone
+            })
+
+        # Print the data extracted for the current page for debugging purposes
+        print(f"Page {page} extracted data:")
+        for agent in agents[-len(agent_cards):]:
+            print(agent)
+
+        # Check if there is a next page
+        next_page_button = soup.find('svg', {
+            'role': 'presentation', 
+            'aria-hidden': 'true', 
+            'class': 'd-icon DIcon'
+        })
+        if not next_page_button:
+            print("No next page found. Scraping complete.")
+            break
+
+        page += 1
+
+    return agents
+
+# Base URL for the agent listing page
+base_url = "https://www.remax.com/real-estate-agents"
+
+# Scrape agents
+print(f"Scraping agents from: {base_url}")
+all_agents = scrape_agents(base_url)
+
+# Convert to DataFrame and save to Excel
+df = pd.DataFrame(all_agents)
+df.to_excel('agents_data_test.xlsx', index=False)
+
+# Uncomment the following line to run the script in the interpreter
+# scrape_agents(base_url)
+
