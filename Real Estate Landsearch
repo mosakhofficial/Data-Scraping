@@ -1,0 +1,123 @@
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+import time
+import random
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Function to get random headers
+def get_random_headers():
+    user_agents = [
+        "mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3",
+        "mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15",
+        "mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.85 Safari/537.36",
+        "mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0",
+        "mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36",
+        "mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_5) AppleWebKit/601.6.17 (KHTML, like Gecko) Version/9.1.1 Safari/601.6.17",
+        "Chrome/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/66.0.3359.181 Safari/537.36",
+        "Chrome/5.0 (X11; Ubuntu; Linux x86_64; rv:88.0) Gecko/20100101 Firefox/88.0",
+        "Chrome/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Chrome/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
+    ]
+    headers = {
+        "User-Agent": random.choice(user_agents),
+        "Accept-Language": "en-US,en;q=0.5",
+        "Referer": "https://www.google.com",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Connection": "keep-alive"
+    }
+    return headers
+
+# Function to fetch and parse a page
+def fetch_page(url, session):
+    retries = 10
+    while retries > 0:
+        try:
+            response = session.get(url, headers=get_random_headers())
+            if response.status_code == 200:
+                return response.text
+            else:
+                logging.warning(f"Failed to retrieve {url}. Status code: {response.status_code}")
+        except requests.RequestException as e:
+            logging.error(f"RequestException while fetching {url}: {e}")
+        retries -= 1
+        time.sleep(random.uniform(10, 20))  # Wait before retrying
+    logging.error(f"Max retries reached for {url}. Skipping.")
+    return None
+
+# Function to parse agent information from a page
+def parse_agents_from_page(html):
+    agents = []
+    soup = BeautifulSoup(html, 'html.parser')
+    
+    # Extract agent information based on the provided HTML structure
+    name_element = soup.find('h1', class_='profile-name g-s-0')
+    company_element = soup.find('a', class_='-plain g-u')
+    address_element = soup.find('address', class_='g-s-0')
+    primary_phone_element = soup.find('a', {'data-type': 'primary'})
+    secondary_phone_element = soup.find('a', {'data-type': 'secondary'})
+
+    name = name_element.text.strip() if name_element else 'N/A'
+    company = company_element.text.strip() if company_element else 'N/A'
+    address = address_element.text.strip() if address_element else 'N/A'
+    primary_phone = primary_phone_element.text.strip() if primary_phone_element else 'N/A'
+    secondary_phone = secondary_phone_element.text.strip() if secondary_phone_element else 'N/A'
+
+    agent_data = {
+        'Name': name,
+        'Company': company,
+        'Address': address,
+        'Primary Phone': primary_phone,
+        'Secondary Phone': secondary_phone
+    }
+
+    if name != 'N/A' and company != 'N/A' and address != 'N/A':
+        agents.append(agent_data)
+    
+    logging.info(f"Parsed 1 agent from the page.")
+    return agents
+
+# Main function to scrape agents from base URLs
+def scrape_agents(base_urls):
+    agents = []
+    session = requests.Session()
+
+    for url in base_urls:
+        logging.info(f"Scraping URL: {url}")
+        html = fetch_page(url, session)
+        if not html:
+            continue
+
+        new_agents = parse_agents_from_page(html)
+        agents.extend(new_agents)
+
+        time.sleep(random.uniform(5, 10))
+
+    return agents
+
+# List of URLs to scrape
+urls = [
+    "https://www.landsearch.com/agents/joey-crews/217685",
+    "https://www.landsearch.com/agents/berkshire-hathaway-homeservice-evans/133398",
+    "https://www.landsearch.com/agents/keller-williams-realty-blount/217731",
+    "https://www.landsearch.com/agents/clasha-tanner/607578",
+    "https://www.landsearch.com/agents/laurie-burgess/217902",
+    "https://www.landsearch.com/agents/re-max-real-estate/133779",
+    "https://www.landsearch.com/agents/fathom-realty-tn/695394"
+]
+
+# Scrape agents from the list of URLs
+print(f"Scraping agents from: {urls}")
+agents_data = scrape_agents(urls)
+
+# Convert to DataFrame and save to Excel
+df = pd.DataFrame(agents_data)
+df.to_excel('US_Testing.xlsx', index=False)
+
+# Uncomment the following line to run the script in the interpreter
+# scrape_agents(urls)
+
+
